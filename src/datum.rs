@@ -1,6 +1,6 @@
 use crate::line::Line;
 use crate::section::Section;
-use crate::utils::{convert_int_to_binary, convert_string_to_int};
+use crate::utils::{convert_int_to_binary, convert_string_to_hex, convert_string_to_int};
 
 pub struct Datum {
     pub name: String,
@@ -19,6 +19,10 @@ impl Datum {
 
     pub fn to_binary(&self) -> String {
         convert_int_to_binary(self.value, 32)
+    }
+
+    pub fn to_hex(&self) -> String {
+        convert_string_to_hex(&self.to_binary(), 4)
     }
 }
 

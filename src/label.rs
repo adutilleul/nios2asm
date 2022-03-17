@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::constants::{TEXT_SECTION_MIN_ADDRESS, WORD};
+use crate::constants::{WORD_SIZE};
 use crate::line::Line;
 use crate::section::Section;
 
@@ -29,16 +29,16 @@ pub fn is_label(code: &str) -> bool {
 
 pub fn resolve_labels(code: &str) -> Option<Label> {
     let label_regex = Regex::new(r"^.*:").unwrap();
-    if let Some(cap) = label_regex.captures_iter(&code).next() {
+    let label = if let Some(cap) = label_regex.captures_iter(&code).next() {
         let name = cap[0].trim_end_matches(':');
         Some(Label::new(name, 0))
     } else {
         None
-    }
+    }; label
 }
 
-pub fn get_addressed_labels(lines: &[Line], codes: &[String]) -> Vec<Label> {
-    let mut current_address = TEXT_SECTION_MIN_ADDRESS;
+pub fn get_addressed_labels(lines: &[Line], codes: &[String], text_min_address: i32) -> Vec<Label> {
+    let mut current_address = text_min_address;
     let labels = extract_labels_from_lines(lines);
 
     codes
@@ -51,7 +51,7 @@ pub fn get_addressed_labels(lines: &[Line], codes: &[String]) -> Vec<Label> {
                     panic!("Use of undeclared label.");
                 }
             } else {
-                current_address += WORD;
+                current_address += WORD_SIZE;
                 None
             }
         })

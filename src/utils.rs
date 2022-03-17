@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Lines, Seek, SeekFrom};
 use std::iter::Map;
 
-use crate::constants::WORD;
+use crate::constants::WORD_SIZE;
 use std::ops::Neg;
 
 type LinesMap<'a> = Map<Lines<BufReader<&'a mut File>>, fn(std::io::Result<String>) -> String>;
@@ -27,8 +27,13 @@ pub fn convert_string_to_int(code: &str) -> i32 {
     }
 }
 
+pub fn convert_string_to_hex(val: &str, len: usize) -> String {
+    let n: u32 = u32::from_str_radix(val, 2).unwrap();
+    format!("{:01$x}", n, len * 2)
+}
+
 pub fn get_address_difference(current_address: i32, target_address: i32) -> i32 {
-    (target_address - current_address) / WORD - 1
+    (target_address - current_address) / WORD_SIZE - 1
 }
 
 pub fn convert_int_to_binary(number: i32, bit: i32) -> String {

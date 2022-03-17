@@ -1,4 +1,5 @@
 use crate::text::Text;
+use crate::constants::{R_INSTRUCTION_OPCODE};
 
 pub enum InstructionFormat {
     REGISTER,
@@ -10,47 +11,50 @@ pub enum InstructionFormat {
 pub struct Instruction {
     pub name: &'static str,
     pub opcode: i32,
-    pub funct: i32,
+    pub opx: i32,
 }
 
 impl Instruction {
-    pub const fn new(name: &'static str, opcode: i32, funct: i32) -> Self {
+    pub const fn new(name: &'static str, opcode: i32, opx: i32) -> Self {
         Self {
             name,
             opcode,
-            funct,
+            opx,
         }
     }
 
-    pub fn is_branch(&self) -> bool {
-        self.opcode == 4 || self.opcode == 5
+    pub fn is_conditional_branch(&self) -> bool {
+        // bne, blt, beq, bge
+        self.opcode == 0x26 || self.opcode == 0x1E || self.opcode == 0x0E || self.opcode == 0x16
     }
 
-    pub fn is_shift(&self) -> bool {
-        self.funct == 0 || self.funct == 2
+    pub fn is_relative_branch(&self) -> bool {
+        // br
+        self.opcode == 0x6
     }
 
     pub fn is_register_jump(&self) -> bool {
-        self.funct == 8
+        // ret
+        self.opx == 0x5
     }
 
-    pub fn to_register_format_text(&self, rs: i32, rt: i32, rd: i32, shamt: i32) -> Text {
-        Text::new(rs, rt, rd, shamt, self.funct, self.opcode, 0, 0)
+    pub fn to_register_format_text(&self, ra: i32, rb: i32, rc: i32, shamt: i32) -> Text {
+        Text::new(ra, rb, rc, shamt, self.opx, R_INSTRUCTION_OPCODE, 0, 0)
     }
 
     pub fn to_jump_format_text(&self, address: i32) -> Text {
-        Text::new(0, 0, 0, 0, self.funct, self.opcode, 0, address)
+        Text::new(0, 0, 0, 0, self.opx, self.opcode, 0, address)
     }
 
-    pub fn to_immediate_format_text(&self, rs: i32, rt: i32, immediate: i32) -> Text {
-        Text::new(rs, rt, 0, 0, self.funct, self.opcode, immediate, 0)
+    pub fn to_immediate_format_text(&self, ra: i32, rb: i32, immediate: i32) -> Text {
+        Text::new(ra, rb, 0, 0, self.opx, self.opcode, immediate, 0)
     }
 }
 
 pub fn convert_opcode_to_format(opcode: i32) -> InstructionFormat {
     match opcode {
-        0 => InstructionFormat::REGISTER,
-        2 | 3 => InstructionFormat::JUMP,
+        R_INSTRUCTION_OPCODE => InstructionFormat::REGISTER,
+        0 | 1 => InstructionFormat::JUMP,
         -1 => InstructionFormat::PSEUDO,
         _ => InstructionFormat::IMMEDIATE,
     }

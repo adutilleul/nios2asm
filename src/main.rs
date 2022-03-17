@@ -7,22 +7,37 @@ mod datum;
 mod instruction;
 mod label;
 mod line;
-mod pseudo_instruction;
+mod asm_macro;
 mod section;
 mod text;
 mod utils;
 
-use crate::constants::{TEXT_SECTION_MIN_ADDRESS, WORD};
+use crate::constants::{TEXT_SECTION_MIN_ADDRESS, DATA_SECTION_MIN_ADDRESS, WORD_SIZE};
 use crate::datum::{extract_data_from_lines, Datum};
 use crate::label::{get_addressed_labels, is_label, resolve_labels, Label};
 use crate::line::{compose_lines, Line};
-use crate::pseudo_instruction::disassemble_pseudo_instruction;
+use crate::asm_macro::disassemble_macro;
 use crate::section::{resolve_section, Section};
 use crate::text::{get_text_from_code, Text};
-use crate::utils::convert_int_to_binary;
-
+use crate::utils::{convert_string_to_int};
 fn main() {
+    println!("nios2assembler-rs (version 1.0.0)");
+
     let args: Vec<String> = env::args().collect();
+
+    if args.len() < 3 {
+        println!("./{} [input_file] [output_file] (text_min_address) (data_min_address)", &args[0]);
+        return;
+    }
+
+    let mut text_start_address = TEXT_SECTION_MIN_ADDRESS;
+    let mut data_start_address = DATA_SECTION_MIN_ADDRESS;
+
+    if args.len() >= 5 {
+        text_start_address = convert_string_to_int(&args[3]);
+        data_start_address = convert_string_to_int(&args[4]);
+    }
+
     let input_filepath = &args[1];
     let output_filepath = &args[2];
     let mut input_file = File::open(input_filepath).expect("Failed to read input file.");
@@ -31,12 +46,13 @@ fn main() {
 
     let data = extract_data_from_lines(&lines);
     let codes = extract_codes(&lines, &data);
-    let labels = get_addressed_labels(&lines, &codes);
+    let labels = get_addressed_labels(&lines, &codes, text_start_address);
+    println!("[+] Disassembling instructions ...");
     let texts = disassemble_instructions(&data, &labels, &codes);
+    println!("[+] Writing output assembly file.");
+    write_output(output_filepath, &data, &texts, text_start_address, data_start_address);
 
-    write_output(output_filepath, &data, &texts);
-
-    println!("Done!");
+    println!("[+] Done!");
 }
 
 fn extract_codes(lines: &[Line], data: &[Datum]) -> Vec<String> {
@@ -48,7 +64,7 @@ fn extract_codes(lines: &[Line], data: &[Datum]) -> Vec<String> {
         .flat_map(|line| {
             if !is_label(&line.text.as_ref().unwrap()) {
                 if let Some(pseudo_instruction_codes) =
-                    disassemble_pseudo_instruction(&line.text.as_ref().unwrap(), &data)
+                disassemble_macro(&line.text.as_ref().unwrap(), &data)
                 {
                     pseudo_instruction_codes
                 } else {
@@ -68,7 +84,7 @@ fn disassemble_instructions(data: &[Datum], labels: &[Label], codes: &[String]) 
         .filter_map(|code| {
             if resolve_labels(&code).is_none() {
                 let text = get_text_from_code(&code, current_address, &data, &labels);
-                current_address += WORD;
+                current_address += WORD_SIZE;
                 Some(text)
             } else {
                 None
@@ -77,17 +93,15 @@ fn disassemble_instructions(data: &[Datum], labels: &[Label], codes: &[String]) 
         .collect()
 }
 
-fn write_output(filepath: &str, data: &[Datum], texts: &[Text]) {
-    let data_section_size = data.len() as i32 * WORD;
-    let text_section_size = texts.len() as i32 * WORD;
+fn write_output(filepath: &str, data: &[Datum], texts: &[Text], text_start_address: i32, data_start_address: i32) {
+    let text_section_size = texts.len() as i32 * WORD_SIZE;
 
-    let data_section_size_binary = convert_int_to_binary(data_section_size, 32);
-    let text_section_size_binary = convert_int_to_binary(text_section_size, 32);
-
-    let mut result = vec![text_section_size_binary, data_section_size_binary];
-    result.extend(texts.iter().map(|text| text.to_binary()));
-    result.extend(data.iter().map(|datum| datum.to_binary()));
-
+    assert!(text_start_address + text_section_size < data_start_address, "The .text section overlap the .data section!");
+    let mut result = vec![format!("v2.0 raw\n{}*0 ", text_start_address)];
+    result.extend(texts.iter().map(|text| format!("{} ", text.to_hex())));
+    result.push(format!("\n{}*0 ", data_start_address - text_section_size));
+    result.extend(data.iter().map(|datum| format!("{} ", datum.to_hex())));
     let mut file = File::create(filepath).expect("Failed to crate output file.");
-    write!(file, "{}", result.join("")).expect("Failed to write output file.");
+
+    write!(file, "{}", result.join("").trim_end()).expect("Failed to write output file.");
 }
